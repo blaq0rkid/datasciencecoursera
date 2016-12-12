@@ -1,49 +1,69 @@
-## step 1
-# read all the data
-test.labels <- read.table("test/y_test.txt", col.names="label")
-test.subjects <- read.table("test/subject_test.txt", col.names="subject")
-test.data <- read.table("test/X_test.txt")
-train.labels <- read.table("train/y_train.txt", col.names="label")
-train.subjects <- read.table("train/subject_train.txt", col.names="subject")
-train.data <- read.table("train/X_train.txt")
+library(plyr)
 
-# put it together in the format of: subjects, labels, everything else
-data <- rbind(cbind(test.subjects, test.labels, test.data),
-              cbind(train.subjects, train.labels, train.data))
+# Step 1
+# Merge the training and test sets to create one data set
+###############################################################################
 
-## step 2
-# read the features
-features <- read.table("features.txt", strip.white=TRUE, stringsAsFactors=FALSE)
-# only retain features of mean and standard deviation
-features.mean.std <- features[grep("mean\\(\\)|std\\(\\)", features$V2), ]
+x_train <- read.table("train/X_train.txt")
+y_train <- read.table("train/y_train.txt")
+subject_train <- read.table("train/subject_train.txt")
 
-# select only the means and standard deviations from data
-# increment by 2 because data has subjects and labels in the beginning
-data.mean.std <- data[, c(1, 2, features.mean.std$V1+2)]
+x_test <- read.table("test/X_test.txt")
+y_test <- read.table("test/y_test.txt")
+subject_test <- read.table("test/subject_test.txt")
 
-## step 3
-# read the labels (activities)
-labels <- read.table("activity_labels.txt", stringsAsFactors=FALSE)
-# replace labels in data with label names
-data.mean.std$label <- labels[data.mean.std$label, 2]
+# create 'x' data set
+x_data <- rbind(x_train, x_test)
 
-## step 4
-# first make a list of the current column names and feature names
-good.colnames <- c("subject", "label", features.mean.std$V2)
-# then tidy that list
-# by removing every non-alphabetic character and converting to lowercase
-good.colnames <- tolower(gsub("[^[:alpha:]]", "", good.colnames))
-# then use the list as column names for data
-colnames(data.mean.std) <- good.colnames
+# create 'y' data set
+y_data <- rbind(y_train, y_test)
 
-## step 5
-# find the mean for each combination of subject and label
-aggr.data <- aggregate(data.mean.std[, 3:ncol(data.mean.std)],
-                       by=list(subject = data.mean.std$subject, 
-                               label = data.mean.std$label),
-                       mean)
+# create 'subject' data set
+subject_data <- rbind(subject_train, subject_test)
 
-## step nothing
-# write the data for course upload
-write.table(format(aggr.data, scientific=T), "tidy2.txt",
-            row.names=F, col.names=F, quote=2)
+# Step 2
+# Extract only the measurements on the mean and standard deviation for each measurement
+###############################################################################
+
+features <- read.table("features.txt")
+
+# get only columns with mean() or std() in their names
+mean_and_std_features <- grep("-(mean|std)\\(\\)", features[, 2])
+
+# subset the desired columns
+x_data <- x_data[, mean_and_std_features]
+
+# correct the column names
+names(x_data) <- features[mean_and_std_features, 2]
+
+# Step 3
+# Use descriptive activity names to name the activities in the data set
+###############################################################################
+
+activities <- read.table("activity_labels.txt")
+
+# update values with correct activity names
+y_data[, 1] <- activities[y_data[, 1], 2]
+
+# correct column name
+names(y_data) <- "activity"
+
+# Step 4
+# Appropriately label the data set with descriptive variable names
+###############################################################################
+
+# correct column name
+names(subject_data) <- "subject"
+
+# bind all the data in a single data set
+all_data <- cbind(x_data, y_data, subject_data)
+
+# Step 5
+# Create a second, independent tidy data set with the average of each variable
+# for each activity and each subject
+###############################################################################
+
+# 66 <- 68 columns but last two (activity & subject)
+averages_data <- ddply(all_data, .(subject, activity), function(x) colMeans(x[, 1:66]))
+
+write.table(averages_data, "averages_data.txt", row.name=FALSE)
